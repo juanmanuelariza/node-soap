@@ -13,6 +13,10 @@ export interface IWSSecurityOptions {
   actor?: string;
   mustUnderstand?;
   envelopeKey?: string;
+  nonce: string;
+  created: string;
+  passwordDigest: string;
+  messageID:string;
 }
 
 export class WSSecurity implements ISecurity {
@@ -25,6 +29,10 @@ export class WSSecurity implements ISecurity {
   private _actor: string;
   private _mustUnderstand: boolean;
   private _envelopeKey: string;
+  private _nonce: string;
+  private _created: string;
+  private _passwordDigest: string;
+  private _messageID:string;
 
   constructor(username: string, password: string, options?: string | IWSSecurityOptions) {
     options = options || {};
@@ -58,40 +66,24 @@ export class WSSecurity implements ISecurity {
     if (options.envelopeKey) {
       this._envelopeKey = options.envelopeKey;
     }
+    if (options.nonce) {
+      this._nonce = options.nonce;
+    }
+    if (options.created) {
+      this._created = options.created;
+    }
+    if (options.passwordDigest) {
+      this._passwordDigest = options.passwordDigest;
+    }
+    if (options.messageID) {
+      this._messageID = options.messageID;
+    }
   }
 
   public toXML(): string {
     // avoid dependency on date formatting libraries
-    function getDate(d) {
-      function pad(n) {
-        return n < 10 ? '0' + n : n;
-      }
-      return d.getUTCFullYear() + '-'
-        + pad(d.getUTCMonth() + 1) + '-'
-        + pad(d.getUTCDate()) + 'T'
-        + pad(d.getUTCHours()) + ':'
-        + pad(d.getUTCMinutes()) + ':'
-        + pad(d.getUTCSeconds()) + 'Z';
-    }
-    const now = new Date();
-    const created = getDate(now);
-    let timeStampXml = '';
-    if (this._hasTimeStamp) {
-      const expires = getDate(new Date(now.getTime() + (1000 * 600)));
-      timeStampXml = '<wsu:Timestamp wsu:Id="Timestamp-' + created + '">' +
-        '<wsu:Created>' + created + '</wsu:Created>' +
-        '<wsu:Expires>' + expires + '</wsu:Expires>' +
-        '</wsu:Timestamp>';
-    }
-
     let password;
     let nonce;
-    if (this._hasNonce || this._passwordType !== 'PasswordText') {
-      // nonce = base64 ( sha1 ( created + random ) )
-      const nHash = crypto.createHash('sha1');
-      nHash.update(created + Math.random());
-      nonce = nHash.digest('base64');
-    }
     if (this._passwordType === 'PasswordText') {
       password = '<wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">' + xmlEscape(this._password) + '</wsse:Password>';
       if (nonce) {
@@ -104,15 +96,34 @@ export class WSSecurity implements ISecurity {
         '<wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">' + nonce + '</wsse:Nonce>';
     }
 
-    return '<wsse:Security ' + (this._actor ? `${this._envelopeKey}:actor="${this._actor}" ` : '') +
-      (this._mustUnderstand ? `${this._envelopeKey}:mustUnderstand="1" ` : '') +
-      'xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">' +
-      timeStampXml +
-      '<wsse:UsernameToken xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd" wsu:Id="SecurityToken-' + created + '">' +
-      '<wsse:Username>' + xmlEscape(this._username) + '</wsse:Username>' +
-      password +
-      (this._hasTokenCreated ? '<wsu:Created>' + created + '</wsu:Created>' : '') +
-      '</wsse:UsernameToken>' +
-      '</wsse:Security>';
+    // return '<wsse:Security ' + (this._actor ? `${this._envelopeKey}:actor="${this._actor}" ` : '') +
+    //   (this._mustUnderstand ? `${this._envelopeKey}:mustUnderstand="1" ` : '') +
+    //   'xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">' +
+    //   timeStampXml +
+    //   '<wsse:UsernameToken xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd" wsu:Id="SecurityToken-' + created + '">' +
+    //   '<wsse:Username>' + xmlEscape(this._username) + '</wsse:Username>' +
+    //   password +
+    //   (this._hasTokenCreated ? '<wsu:Created>' + created + '</wsu:Created>' : '') +
+    //   '</wsse:UsernameToken>' +
+    //   '</wsse:Security>';
+
+  const xmlAmadeus =
+    '<oas:Security xmlns:oas="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd" xmlns:oas1="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">' +
+    '  <oas:UsernameToken oas1:Id="UsernameToken-1">' +
+    '    <oas:Username>WSCAUGOO</oas:Username>' +
+    '    <oas:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">' +
+    this._nonce +
+    '</oas:Nonce>' +
+    '    <oas:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">' +
+    this._passwordDigest +
+    '</oas:Password>' +
+    '    <oas1:Created>' +
+    this._created +
+    '</oas1:Created>' +
+    '  </oas:UsernameToken>' +
+    '</oas:Security>';
+
+return
+
   }
 }
